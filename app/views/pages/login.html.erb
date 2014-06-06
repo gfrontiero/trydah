@@ -1,0 +1,14 @@
+
+<h1>Login/Sign Up</h1>
+
+<% if user_signed_in? %>
+  # do something
+  <% else %>
+
+<p> 
+  <%= link_to "Log in", new_user_session_path, class: "btn btn-danger" %>
+  <%= link_to "Sign up", new_user_registration_path, class: "btn btn-danger" %>
+
+</p>
+
+<% end %>
