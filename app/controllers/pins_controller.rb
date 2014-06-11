@@ -6,7 +6,7 @@ class PinsController < ApplicationController
   def index
     @pins = Pin.all.order("RANDOM()").paginate(:page => params[:page])
   end
- end
+ 
 
   def show
   end
@@ -55,5 +55,6 @@ class PinsController < ApplicationController
     # Never trust parameters from the scary internet, only allow the white list through.
     def pin_params
       params.require(:pin).permit(:description, :image)
+    end
     end
 
