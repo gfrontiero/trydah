@@ -6,6 +6,11 @@ class PinsController < ApplicationController
   def index
     @pins = Pin.all.order("RANDOM()").paginate(:page => params[:page])
   end
+
+  def show_by_zip
+  @pins = Pins.where(zip: params[:zip])
+  render action: 'index' 
+end
  
 
   def show
