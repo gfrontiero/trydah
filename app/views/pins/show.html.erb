@@ -5,16 +5,16 @@
 
     <div class="panel panel-default">
     	<div class="panel-heading  ">
+    		
 <%=image_tag @pin.image.url (:medium) %>
+
+<div class="ordrin-embed" data-rid="24341" data-target="web" data-servers="test" data-key="Gd5EPtCzOTV2bWccLTgnqac9f9K0xy6n_NKVaX-Evvw"></div>
 
 
 </div>
   <div class="panel-body">
 <p><%= @pin.description %></p>
 <p><strong><%= @pin.user.name if @pin.user %></strong></p>
-
-<div class="ordrin-embed" data-rid="24341" data-target="web" data-servers="test" data-key="Gd5EPtCzOTV2bWccLTgnqac9f9K0xy6n_NKVaX-Evvw"></div>
-
 
 <% if @pin.user == current_user %>
 <%= link_to edit_pin_path(@pin) do %>
