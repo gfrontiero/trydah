@@ -7,10 +7,7 @@ class PinsController < ApplicationController
     @pins = Pin.all.order("RANDOM()").paginate(:page => params[:page])
   end
 
-  def show_by_zip
-  @pins = Pins.where(zip: params[:zip])
-  render action: 'index' 
-end
+  
  
 
   def show
@@ -59,7 +56,7 @@ end
 
     # Never trust parameters from the scary internet, only allow the white list through.
     def pin_params
-      params.require(:pin).permit(:description, :image)
+      params.require(:pin).permit(:description, :image,)
     end
 
 end

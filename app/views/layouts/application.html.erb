@@ -6,6 +6,16 @@
   <%= javascript_include_tag 'application', 'data-turbolinks-track' => true %>
   <%= csrf_meta_tags %>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+
+<script type="text/javascript">
+  (function(){
+    var ow = document.createElement('script'); 
+    ow.type = 'text/javascript'; ow.async = true; ow.src = '//menus.ordr.in/js/widget.js';
+    var s = document.getElementsByTagName('script')[0]; 
+    s.parentNode.insertBefore(ow, s);
+  })();
+</script>
+
 </head>
 <body>
 <%= render 'layouts/header' %>
