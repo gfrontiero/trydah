@@ -7,10 +7,7 @@ class PinsController < ApplicationController
     @pins = Pin.all.order("RANDOM()").paginate(:page => params[:page])
   end
 
-  
- 
-
-  def show
+    def show
   end
 
   def new
