@@ -1,7 +1,7 @@
 <%= render 'pages/home' unless user_signed_in? %>
 
-<div class="jumbotron center">
 
+<div class="jumbotron center">
 
 
 <h1>Welcome to Trydah!</h1>
@@ -12,11 +12,22 @@
   </div>
 
 
+
   <button type="submit" class="btn btn-danger">Search</button>
 </form>
   
 </div>
 
+<style>
+
+html { 
+      background: url('http://www.sunnycatering.co.uk/communities/4/004/011/513/204/images/4593886873.jpg') no-repeat center center fixed; 
+      -webkit-background-size: cover;
+      -moz-background-size: cover;
+      -o-background-size: cover;
+      background-size: cover;
+    }
+    </style>
 
 
   <li class="dropdown">
@@ -42,6 +53,8 @@
           </ul>
         </li>
 
+
+
 <div id="pins" class="transitions-enabled">
 <% @pins.each do |pin| %>
   <div class="box panel panel-default"> 
@@ -62,7 +75,7 @@
             <% end %>
         </div>
         <% end %>
-    
+  
     </div>
       </div>
  <% end %>
