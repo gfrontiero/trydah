@@ -1,11 +1,10 @@
-$body-bg:     url('http://www.gaiahealthblog.com/wordpress1/wp-content/uploads/2012/03/tomatoes1.jpg');
+$body-bg:    #bdc3c7;
 $navbar-default-bg:    white;
 $navbar-default-link-color:  #95a5a6;
 $navbar-default-link-hover-color:  #e74c3c;
 $navbar-default-brand-color:  #e74c3c;
 @import 'bootstrap';
 $jumbotron-bg: white;
-
 
 
 .center {
@@ -15,4 +14,3 @@ $jumbotron-bg: white;
 .navbar-brand {
 	font-weight: bold;
 }
-
