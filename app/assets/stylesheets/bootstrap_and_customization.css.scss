@@ -1,4 +1,4 @@
-$body-bg:    #bdc3c7;
+$body-bg:  #ecf0f1;
 $navbar-default-bg:    white;
 $navbar-default-link-color:  #95a5a6;
 $navbar-default-link-hover-color:  #e74c3c;
@@ -8,7 +8,9 @@ $jumbotron-bg: white;
 
 
 .center {
-	text-align: center;
+	text-align: center; color: white;
+	text-shadow: 5px 5px 5px black;
+		 background: url('https://fbcdn-sphotos-h-a.akamaihd.net/hphotos-ak-xpa1/v/t35.0-12/10499657_10101005557946183_418124203_o.jpg?oh=ab166b5368400c52d3e7dbe35c73431f&oe=53B7D112&__gda__=1404549187_918622270aecbd06a2ad6f29ca2066fa');
 }
 
 .navbar-brand {

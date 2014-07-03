@@ -21,14 +21,17 @@
 
           
       <ul class="nav navbar-nav navbar-right">
-        <li><%= link_to "Home" , "http://www.trydah.com/" %></li>
+        <li>
+          <%= link_to "Home" , "http://www.trydah.com/" %>
+          
+        </li>
         
 
         <% if user_signed_in? %>
 
           <li>
             <%= link_to new_pin_path do %>
-              <span class="glyphicon glyphicon-plus"></span> New Pin
+              <span class="glyphicon glyphicon-plus"></span>  New/Edit Dish
             <% end %>
           </li>
 
