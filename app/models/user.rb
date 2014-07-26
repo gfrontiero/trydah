@@ -6,6 +6,6 @@ class User < ActiveRecord::Base
 
         has_many :pins
 
-          validates :user, :presence => true
+          
 
 end

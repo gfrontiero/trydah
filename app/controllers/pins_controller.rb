@@ -5,9 +5,13 @@ class PinsController < ApplicationController
 
   def index
     @pins = Pin.all.order("RANDOM()").paginate(:page => params[:page])
+    
   end
 
-    def show
+
+  def show
+    ordrin_api = Ordrin::APIs.new("lRP0rLMgRq64mNmmvlO56sSpw7mN_QqbK7NTR7MoryU", :test)
+    @restaurant = ordrin_api.restaurant_details({'rid' => '147'})
   end
 
   def new
