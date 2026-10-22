@@ -1,0 +1,55 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Simulates three weeks of push/pull/legs training, then generates today's workout.
+#   ruby fitbod_teardown/bin/demo [goal] [split] [minutes]
+#   e.g. ruby fitbod_teardown/bin/demo strength fresh_muscle_groups 45
+
+require_relative "../lib/fitbod_clone"
+include FitbodClone
+
+goal = (ARGV[0] || "hypertrophy").to_sym
+split = (ARGV[1] || "push_pull_legs").to_sym
+minutes = (ARGV[2] || 60).to_i
+
+now = Time.new(2026, 10, 22, 18, 0, 0)
+day = 86_400
+sessions = {
+  push: [[:barbell_bench_press, 185, 8], [:overhead_press, 105, 8], [:lateral_raise, 20, 12], [:tricep_pushdown, 60, 12]],
+  pull: [[:barbell_row, 155, 8], [:lat_pulldown, 130, 10], [:face_pull, 50, 15], [:db_curl, 30, 10]],
+  legs: [[:back_squat, 225, 6], [:romanian_deadlift, 185, 8], [:leg_curl, 90, 12], [:calf_raise, 160, 12]]
+}
+
+sets = []
+rotation = sessions.keys.cycle
+# Train 5 days out of 7 for three weeks; weights creep up ~2% a week.
+(1..21).reverse_each do |days_ago|
+  next if [3, 6].include?(days_ago % 7)
+
+  t = now - days_ago * day
+  week_gain = 1.0 + 0.02 * (3 - days_ago / 7)
+  sessions[rotation.next].each do |id, weight, reps|
+    3.times do |i|
+      sets << LoggedSet.new(exercise_id: id, weight: (weight * week_gain).round, reps:, rir: [3, 2, 1][i], performed_at: t + i * 180)
+    end
+  end
+end
+cardio = [CardioSession.new(minutes: 40, intensity: 0.7, performed_at: now - 1 * day)]
+
+history = History.new(sets:, cardio:)
+profile = UserProfile.new(bodyweight: 180, experience: :intermediate, sex: :male)
+settings = PlanSettings.new(goal:, split:, duration_min: minutes)
+prefs = Preferences.new(lateral_raise: :more, skull_crusher: :exclude)
+
+gen = WorkoutGenerator.new(library: ExerciseLibrary.default, history:, profile:, settings:,
+                           preferences: prefs, now:, rng: Random.new(42))
+
+puts "Muscle recovery"
+gen.recovery.sort_by { |_, v| v }.each { |m, v| puts format("  %-11s %5.1f%%", m, v) }
+
+caps = CapabilityEstimator.new(library: ExerciseLibrary.default, history:, profile:, now:)
+score = StrengthScore.new(library: ExerciseLibrary.default, history:, profile:, capabilities: caps)
+puts "\nStrength score: #{score.overall}  #{score.muscle_scores}"
+
+puts "\nGoal: #{goal}, split: #{split}, #{minutes} min\n\n"
+puts FitbodClone.format_workout(gen.generate)
