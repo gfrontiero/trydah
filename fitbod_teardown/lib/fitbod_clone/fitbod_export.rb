@@ -23,6 +23,8 @@ module FitbodClone
 
     # [pattern, muscles, mechanic, family]
     RULES = [
+      [/\bclean\b|snatch|\bjerk\b|high pull/i, { quads: 1.0, glutes: 1.0, hamstrings: 0.8, traps: 0.8, shoulders: 0.6 },
+       :compound, :olympic],
       [/calf/i, { calves: 1.0 }, :isolation, :calf],
       [/shrug/i, { traps: 1.0, forearms: 0.4 }, :isolation, :shrug],
       [/abduct/i, { abductors: 1.0, glutes: 0.5 }, :isolation, :abduction],

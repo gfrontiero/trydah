@@ -30,8 +30,24 @@ module FitbodClone
       endurance:   { reps: { 12 => 30, 15 => 40, 20 => 30 },
                      sets: { 2 => 30, 3 => 70 }, rest: { compound: 60, isolation: 45 } },
       general:     { reps: { 8 => 25, 10 => 35, 12 => 25, 15 => 15 },
-                     sets: MEASURED_SETS, rest: { compound: 90, isolation: 60 } }
+                     sets: MEASURED_SETS, rest: { compound: 90, isolation: 60 } },
+      get_lean:    { reps: { 8 => 15, 10 => 30, 12 => 30, 15 => 25 },
+                     sets: { 3 => 60, 4 => 40 }, rest: { compound: 90, isolation: 60 } },
+      powerlifting: { reps: { 2 => 10, 3 => 25, 4 => 20, 5 => 30, 6 => 15 },
+                      sets: { 4 => 50, 5 => 50 }, rest: { compound: 240, isolation: 150 },
+                      families: { squat: 2.0, deadlift: 2.0, horizontal_press: 1.5 } },
+      olympic_weightlifting: { reps: { 1 => 10, 2 => 30, 3 => 40, 5 => 20 },
+                               sets: { 5 => 60, 6 => 40 }, rest: { compound: 180, isolation: 120 },
+                               families: { olympic: 3.0, squat: 1.5, vertical_press: 1.2 } }
     }.freeze
+    # Fitbod's goal names (Goal screen) -> the configs above.
+    GOAL_ALIASES = { build_muscle: :hypertrophy, get_stronger: :strength, improve_fitness: :general,
+                     reduce_bodyweight: :endurance }.freeze
+    EMPHASIS_EXTRA_SET = 1.3   # primary-muscle emphasis at/above this adds a set
+    EMPHASIS_FEWER_SET = 0.75  # at/below this drops one
+    SET_RANGE = (2..6)
+
+    def self.goal_config(goal) = GOALS.fetch(GOAL_ALIASES.fetch(goal, goal))
     BODYWEIGHT_RIR = 0 # export: prescribed reps sit at the recent max-rep average
     TOO_HARD_RIR = 0
     TOO_EASY_RIR = 4
@@ -47,9 +63,10 @@ module FitbodClone
     end
 
     def prescribe(exercise)
-      goal = GOALS.fetch(@settings.goal)
+      goal = self.class.goal_config(@settings.goal)
       cap = @capabilities.estimate(exercise)
-      rx = Prescription.new(exercise:, sets: draw(goal[:sets]),
+      sets = (draw(goal[:sets]) + emphasis_sets(exercise)).clamp(SET_RANGE)
+      rx = Prescription.new(exercise:, sets:,
                             rest_sec: goal[:rest].fetch(exercise.mechanic), warmups: [], capability: cap)
 
       case exercise.load_type
@@ -67,7 +84,7 @@ module FitbodClone
 
     def weight_for_reps(exercise, reps)
       one_rm = @capabilities.estimate(exercise).value
-      round(OneRepMax.weight_for(one_rm, reps) * feedback_factor(exercise), exercise.increment)
+      round(OneRepMax.weight_for(one_rm, reps) * feedback_factor(exercise), exercise)
     end
 
     private
@@ -88,15 +105,39 @@ module FitbodClone
       1.0
     end
 
-    def round(weight, increment)
-      [(weight / increment).round * increment, increment].max
+    # [Inferred] Fitbod's "Muscle group focus": prioritised muscles get an extra set.
+    def emphasis_sets(exercise)
+      e = @settings.mean_emphasis(exercise.primary_muscles)
+      return 1 if e >= EMPHASIS_EXTRA_SET
+      return -1 if e <= EMPHASIS_FEWER_SET
+
+      0
+    end
+
+    # Rounds to a load the gym can make: the listed dumbbells/kettlebells if the plan gives
+    # them (the app's equipment screen lists exact weights), bar + pairs of the smallest plate
+    # for barbells, otherwise the equipment's default increment.
+    def round(weight, exercise)
+      equip = exercise.load_equipment
+      listed = (@settings.available_weights || {})[equip]
+      return listed.min_by { |w| [(w - weight).abs, w] } if listed&.any?
+
+      plates = (@settings.available_weights || {})[:plates]
+      if %i[barbell ez_bar].include?(equip) && plates&.any?
+        bar = Array((@settings.available_weights || {})[:barbell]).first || 45.0
+        step = 2 * plates.min
+        return [bar + ((weight - bar) / step).round * step, bar].max
+      end
+
+      inc = exercise.increment
+      [(weight / inc).round * inc, inc].max
     end
 
     def warmups(exercise, working)
       return [] if working < WARMUP_MIN_WORKING_WEIGHT
 
       WARMUP_RAMP.filter_map do |pct, reps|
-        w = round(working * pct, exercise.increment)
+        w = round(working * pct, exercise)
         WarmupSet.new(w, reps) if w < working
       end
     end

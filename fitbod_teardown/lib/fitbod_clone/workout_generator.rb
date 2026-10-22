@@ -19,10 +19,11 @@ module FitbodClone
       upper: %i[chest shoulders triceps biceps forearms lats upper_back traps],
       lower: %i[quads hamstrings glutes calves adductors abductors lower_back abs]
     }.freeze
-    # "Upper/Lower x3 + Full Body": in the export, sessions alternate upper/lower, with a
-    # mostly-upper mixed day roughly every seventh session.
-    FULL_BODY_EVERY = 6         # upper/lower sessions between full-body days
-    PURE_SESSION_SHARE = 0.9    # share of sets on one half for a session to count as U or L
+    # "Upper/Lower x3 + Full Body" and "Push/Pull/Legs x2 + Full Body" (the app's 7-day
+    # options): in the export, sessions follow the rotation strictly, with a mixed day roughly
+    # every seventh session.
+    FULL_BODY_EVERY = 6         # split sessions between full-body days
+    PURE_SESSION_SHARE = { upper_lower: 0.9, push_pull_legs: 0.75 }.freeze # [Measured] / [Inferred]
 
     def initialize(library:, history:, profile:, settings:, preferences: Preferences.new,
                    now: Time.now, recovery_overrides: {}, rng: Random.new)
@@ -49,8 +50,11 @@ module FitbodClone
       budget = @settings.duration_min * 60
 
       while plan.size < MAX_EXERCISES
+        # Workouts open with a compound lift (96% of sessions in the export).
         ranked = @selector.rank(projected, targets, exclude: plan.map { |rx| rx.exercise.id },
-                                                    planned_families: plan.map { |rx| rx.exercise.family })
+                                                    planned_families: plan.map { |rx| rx.exercise.family },
+                                                    compound_only: plan.empty?)
+        ranked = @selector.rank(projected, targets) if ranked.empty? && plan.empty?
         break if ranked.empty?
 
         rx = @prescriber.prescribe(ranked.first.first)
@@ -76,9 +80,10 @@ module FitbodClone
       when :full_body then [:full_body, MUSCLES]
       when :push_pull_legs then freshest_day(PUSH_PULL_LEGS)
       when :upper_lower then freshest_day(UPPER_LOWER)
-      when :upper_lower_full then upper_lower_full_day
+      when :upper_lower_full then rotation_day(UPPER_LOWER, PURE_SESSION_SHARE[:upper_lower])
+      when :push_pull_legs_full then rotation_day(PUSH_PULL_LEGS, PURE_SESSION_SHARE[:push_pull_legs])
       when :fresh_muscle_groups
-        groups = MUSCLE_GROUPS.max_by(2) { |_, ms| mean_recovery(ms) }
+        groups = MUSCLE_GROUPS.max_by(2) { |_, ms| mean_recovery(ms) * @settings.mean_emphasis(ms) }
         [groups.map(&:first).join("+").to_sym, groups.flat_map(&:last)]
       else raise ArgumentError, "unknown split #{@settings.split}"
       end
@@ -89,30 +94,31 @@ module FitbodClone
       days.max_by { |_, ms| mean_recovery(ms) }
     end
 
-    def upper_lower_full_day
-      kinds = @history.sessions.sort.map { |_, sets| self.class.session_kind(@library, sets) }.compact
+    # Next day in the rotation after the last split day; full body every FULL_BODY_EVERY sessions.
+    def rotation_day(days, pure_share)
+      kinds = @history.sessions.sort.map { |_, sets| self.class.session_kind(@library, sets, days, pure_share) }.compact
       since_full = kinds.reverse.take_while { |k| k != :full_body }
       return [:full_body, MUSCLES] if kinds.include?(:full_body) && since_full.size >= FULL_BODY_EVERY
 
+      order = days.keys
       last = kinds.reverse.find { |k| k != :full_body }
-      day = last == :upper ? :lower : :upper
-      [day, UPPER_LOWER.fetch(day)]
+      day = last ? order[(order.index(last) + 1) % order.size] : order.first
+      [day, days.fetch(day)]
     end
 
-    # :upper, :lower or :full_body by where the session's sets landed (abs count for neither).
-    def self.session_kind(library, sets)
-      upper = lower = 0
+    # Which split day a session was, by where its sets landed (abs count for none), or
+    # :full_body when no day reaches pure_share of the sets.
+    def self.session_kind(library, sets, days, pure_share)
+      counts = days.transform_values { 0 }
       sets.each do |s|
         prime = library[s.exercise_id]&.primary_muscles || []
-        upper += 1 if prime.intersect?(UPPER_LOWER[:upper])
-        lower += 1 if prime.intersect?(UPPER_LOWER[:lower] - %i[abs])
+        days.each { |day, muscles| counts[day] += 1 if prime.intersect?(muscles - %i[abs]) }
       end
-      total = upper + lower
+      total = counts.values.sum
       return nil if total.zero?
-      return :upper if upper >= PURE_SESSION_SHARE * total
-      return :lower if lower >= PURE_SESSION_SHARE * total
 
-      :full_body
+      day, n = counts.max_by { |_, c| c }
+      n >= pure_share * total ? day : :full_body
     end
 
     def mean_recovery(muscles)

@@ -14,6 +14,7 @@ require_relative "fitbod_clone/weekly_set_targets"
 require_relative "fitbod_clone/fitbod_export"
 require_relative "fitbod_clone/backtest"
 require_relative "fitbod_clone/export_analysis"
+require_relative "fitbod_clone/plan"
 
 # Clean-room reconstruction of Fitbod's workout engine from public sources.
 # See ../README.md for the teardown and where each piece comes from.

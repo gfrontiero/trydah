@@ -1,0 +1,17 @@
+export: fixtures/sample_export.csv
+goal: build_muscle
+split: push_pull_legs_full
+workouts_per_week: 7
+duration_min: 45
+experience: advanced
+available_weights:
+  dumbbell: [5, 8, 12, 15, 20, 25]
+  plates: [2.5, 5, 10, 25, 45]
+emphasis:
+  shoulders: 1.4
+  chest: 0.8
+preferences:
+  less: [Dumbbell Bicep Curl]
+assessments:
+  - date: 2026-10-22
+    observations: { shoulders: behind chest }

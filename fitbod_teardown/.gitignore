@@ -4,3 +4,9 @@ data/*
 *.csv
 !test/fixtures/*.csv
 !data/fitbod_export_2019-04_2026-10.csv
+# Body photos never belong in this public repo.
+photos/
+*.jpg
+*.jpeg
+*.png
+*.heic

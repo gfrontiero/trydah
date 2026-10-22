@@ -1,0 +1,43 @@
+# Training plan read by bin/workout. Claude updates it from goals and body photos using
+# .claude/skills/fitbod-coach/SKILL.md. Photos are never stored in this repo.
+#
+# Settings mirror the Fitbod My Plan screen as of 2026-10-22.
+
+export: data/fitbod_export_2019-04_2026-10.csv
+
+# build_muscle | get_lean | get_stronger | reduce_bodyweight | improve_fitness |
+# powerlifting | olympic_weightlifting
+goal: build_muscle
+
+# upper_lower_full ("Upper/Lower x3 + Full Body") | push_pull_legs_full ("Push/Pull/Legs x2
+# + Full Body", the app's recommendation for 7/week) | upper_lower | push_pull_legs |
+# full_body | fresh_muscle_groups
+split: upper_lower_full
+workouts_per_week: 7
+duration_min: 45
+experience: advanced
+variability: balanced
+warmups: true
+
+# Equipment: whatever was trained with in this many days (or list it under `equipment:`).
+equipment_from_recent_days: 90
+
+# Loads the gym can make. Only list dumbbells/kettlebells once the full list is known:
+# the app shows dumbbells "2.5, 3.0, 5.0, 8.0..." and kettlebells "9.0, 13.0, 18.0, 26.0...".
+available_weights:
+  barbell: [45]
+  plates: [2.5, 5, 10, 25, 35, 45]   # app shows "2.5, 5.0, 10.0, 25.0..."; 35/45 assumed
+
+# Per-muscle priority, 0.5-2.0 (1.0 = neutral; ~1.3-1.5 = bring up; ~0.7-0.8 = maintain).
+# Muscles: chest shoulders triceps biceps forearms lats upper_back traps lower_back abs
+#          quads hamstrings glutes calves adductors abductors
+emphasis: {}
+
+# Exercise names as they appear in the Fitbod export.
+preferences:
+  more: []
+  less: []
+  exclude: []
+
+# Dated photo reviews, newest first: what was seen and what changed in this file.
+assessments: []

@@ -80,9 +80,17 @@ Onboarding ──► My Plan / Gym Profile ──► Workout tab: today's genera
 - **Goals:** strength (mostly 1-6 reps, about 85-100% 1RM, 3-5 min rest), hypertrophy (mostly
   6-12 reps with some 1-5 and 15-25 work, 60-180 s rest), plus endurance and general fitness
   (higher reps, shorter rest). Weekly volume target is about 10-20 working sets per muscle. **[Stated]**
+  The Goal screen lists Build Muscle, Get Lean and Get Stronger as common goals, and Reduce
+  Bodyweight ("higher-rep, circuit-style"), Improve Fitness, Practice Powerlifting and Practice
+  Olympic Weightlifting as others. **[Observed]**
 - **Splits:** Push/Pull/Legs, Upper/Lower, Full Body, and **Fresh Muscle Groups** (trains your
   two most-recovered groups). More splits appear when Focus Exercises are enabled. A split is
-  recommended from workouts per week. **[Stated]**
+  recommended from workouts per week. **[Stated]** For 7 workouts/week the app offers
+  Push/Pull/Legs x2 + Full Body (recommended), Upper/Lower x3 + Full Body and Full Body x7, with
+  Upper/Lower x3 and Push/Pull/Legs x2 under "other". **[Observed]**
+- **Equipment:** per gym, with the exact loads available: dumbbells "2.5, 3.0, 5.0, 8.0…",
+  kettlebells "9.0, 13.0, 18.0, 26.0…", a 45 lb barbell, plates "2.5, 5.0, 10.0, 25.0…". So
+  prescriptions can round to loads the gym can actually make. **[Observed]**
 - **Exercise variability:** More Consistent (keeps about 70-80% of exercises week to week),
   Balanced (default), More Variety. **[Stated]** On Balanced, only about a third of a week's
   exercises had appeared in the previous 4 active weeks. **[Measured]**
@@ -167,6 +175,7 @@ Code map:
 | Workout generator (splits, time budget, ordering) | `lib/fitbod_clone/workout_generator.rb` |
 | Strength Score / mStrength | `lib/fitbod_clone/strength_score.rb` |
 | Weekly set targets | `lib/fitbod_clone/weekly_set_targets.rb` |
+| Plan file (goals, emphasis, preferences) | `lib/fitbod_clone/plan.rb`, `plans/my_plan.yml` |
 | Fitbod CSV export importer | `lib/fitbod_clone/fitbod_export.rb` |
 | Behaviour profile of an export | `lib/fitbod_clone/export_analysis.rb` |
 | Backtest against an export | `lib/fitbod_clone/backtest.rb` |
@@ -262,6 +271,12 @@ otherwise full body) and schedules full body after 6 upper/lower sessions; other
 opposite of the last upper/lower day. The rule gives the app's "Upper Body Day" after a
 "Lower Body Day 1". Whether the full-body day is triggered by count, by weekday or by weekly set
 targets is not yet pinned down. **[Measured]** from the export's session sequence.
+
+**Opening exercise.** 96% of the export's 2026 sessions open with a compound lift, and about
+half of each session's exercises are compounds (53%). Without a rule the engine produced 25%
+compounds. Requiring the first pick to be a compound brings it to 48% with nothing else
+changed. A general compound bonus overshot to all-compound workouts, so there isn't one.
+**[Measured]**
 
 **Session length. [Inferred]** Each exercise costs `sets × (45 s + rest) + 60 s per warm-up + 90 s`
 transition. Exercises are added until the duration budget is spent, with a minimum of 3 and a maximum of 10.
@@ -464,6 +479,30 @@ the engine's weight for that rep target.
 - **Exercise mapping.** 481 of the 675 names map to muscles via keyword rules in
   `fitbod_export.rb`. The rest are mobility, cardio or unusual movements and are skipped.
 
+## 8. Coaching layer: goals, body photos and a plan file
+
+The engine reproduces Fitbod. The coaching layer lets Claude steer it for one person from what
+they want and what their photos show.
+
+- **`plans/my_plan.yml`** holds the My Plan settings (goal, split, workouts/week, duration,
+  experience, variability, warm-ups), the gym's available weights, a per-muscle `emphasis`
+  (0.5-2.0, 1.0 neutral), Recommend More/Less/Exclude by exercise name, and dated
+  `assessments`. `Plan.load` rejects unknown goals, splits, muscles and exercise names.
+- **Emphasis** is the lever photos pull. It multiplies exercise scores by the activation-
+  weighted emphasis of the muscles worked, adds a set when the prime movers' emphasis is
+  ≥ 1.3 (drops one at ≤ 0.75), ranks Fresh Muscle Groups by recovery × emphasis, and scales the
+  weekly push/pull/legs targets. Fitbod has a muscle-focus setting but doesn't publish its
+  effect, so these rules are **[Inferred]**.
+- **Goals:** all seven Fitbod goals are accepted. `powerlifting` boosts the squat, deadlift and
+  bench families and `olympic_weightlifting` boosts cleans and snatches (when the export has
+  them). Their rep/set schemes are **[Inferred]** from the goal descriptions.
+- **`bin/workout`** prints today's workout for the plan, with recovery, weekly-set progress,
+  and which exercises were picked partly for emphasis.
+- **`.claude/skills/fitbod-coach/SKILL.md`** (at the repo root) tells Claude how to turn goals,
+  photos, screenshots or a new export into plan edits: how to judge relative muscle
+  development from consistent front/back/side photos, how to map that to emphasis (at most 3-4
+  muscles, ±0.3 per review), what photos can't show, and that photos never go in this public repo.
+
 ## Running the reference engine
 
 Needs Ruby ≥ 3.1 and only the standard library (tests use minitest, a bundled gem).
@@ -473,6 +512,10 @@ cd fitbod_teardown
 for t in test/*_test.rb; do ruby -Ilib $t; done      # tests
 ruby bin/demo                                        # simulated history: hypertrophy, PPL, 60 min
 ruby bin/demo strength fresh_muscle_groups 45        # goal, split, minutes
+
+# Today's workout from the plan file (uses the export it points to):
+ruby bin/workout                                     # plans/my_plan.yml; add --seed N to repeat
+ruby bin/workout path/to/other_plan.yml
 
 # With the bundled export, or your own (other files in data/ are git-ignored):
 ruby bin/analyze data/fitbod_export_2019-04_2026-10.csv          # behaviour profile + backtest

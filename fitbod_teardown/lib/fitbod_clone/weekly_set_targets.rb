@@ -28,7 +28,7 @@ module FitbodClone
 
     def targets
       scale = @settings.workouts_per_week * @settings.duration_min / OBSERVED_MINUTES.to_f
-      OBSERVED.transform_values { |t| (t * scale).round }
+      OBSERVED.to_h { |group, t| [group, (t * scale * @settings.mean_emphasis(GROUPS[group])).round] }
     end
 
     def completed(now)

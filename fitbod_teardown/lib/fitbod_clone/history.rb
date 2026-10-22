@@ -22,12 +22,27 @@ module FitbodClone
     :equipment,     # Array of equipment symbols
     :variability,   # :consistent, :balanced, :varied
     :warmups,       # true/false
+    :emphasis,      # { muscle => factor }: 1.0 neutral, >1 prioritise, <1 maintain
+    :available_weights, # { :dumbbell => [lb, ...], :kettlebell => [...], :plates => [...], :barbell => [45] }
     keyword_init: true
   ) do
     def initialize(goal: :hypertrophy, split: :fresh_muscle_groups, duration_min: 60, workouts_per_week: 4,
                    equipment: %i[barbell dumbbell bench squat_rack cable machine pullup_bar ez_bar],
-                   variability: :balanced, warmups: true)
+                   variability: :balanced, warmups: true, emphasis: {}, available_weights: {})
       super
+    end
+
+    # Activation-weighted mean emphasis over the muscles an exercise trains (1.0 = neutral).
+    def emphasis_factor(exercise)
+      return 1.0 if emphasis.empty?
+
+      exercise.muscles.sum { |m, a| a * emphasis.fetch(m, 1.0) } / exercise.muscles.values.sum
+    end
+
+    def mean_emphasis(muscles)
+      return 1.0 if muscles.empty?
+
+      muscles.sum { |m| emphasis.fetch(m, 1.0) } / muscles.size
     end
   end
 

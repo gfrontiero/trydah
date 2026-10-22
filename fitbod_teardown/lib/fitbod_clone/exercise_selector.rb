@@ -31,10 +31,11 @@ module FitbodClone
     end
 
     # => [[exercise, score], ...] best first, zero scores dropped.
-    def rank(recovery, targets, exclude: [], planned_families: [])
+    def rank(recovery, targets, exclude: [], planned_families: [], compound_only: false)
       targets = targets.to_set
       candidates.filter_map do |ex|
         next if exclude.include?(ex.id)
+        next if compound_only && !ex.compound?
         next unless ex.primary_muscles.any? { |m| targets.include?(m) }
 
         s = score(ex, recovery)
@@ -50,10 +51,16 @@ module FitbodClone
         recovery_factor(ex, recovery) *
         @preferences.factor(ex.id) *
         familiarity(ex) *
-        @variance.fetch(ex.id, 1.0)
+        @variance.fetch(ex.id, 1.0) *
+        @settings.emphasis_factor(ex) *
+        goal_family_boost(ex)
     end
 
     private
+
+    def goal_family_boost(ex)
+      Prescriber.goal_config(@settings.goal).fetch(:families, {}).fetch(ex.family, 1.0)
+    end
 
     def recovery_factor(ex, recovery)
       total = ex.muscles.values.sum

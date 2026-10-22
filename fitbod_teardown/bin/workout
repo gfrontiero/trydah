@@ -1,0 +1,42 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Today's workout from a plan file and the Fitbod export it points to.
+#   ruby fitbod_teardown/bin/workout [plans/my_plan.yml] [--seed N]
+
+require_relative "../lib/fitbod_clone"
+include FitbodClone
+
+seed = (i = ARGV.index("--seed")) ? ARGV.slice!(i, 2).last.to_i : Random.new_seed
+plan = Plan.load(ARGV[0] || File.expand_path("../plans/my_plan.yml", __dir__))
+import = FitbodExport.load(plan.export_path)
+library = import.library
+history = import.history
+now = Time.now
+settings = plan.settings(library:, history:, now:)
+
+gen = WorkoutGenerator.new(library:, history:, profile: plan.profile, settings:,
+                           preferences: plan.preferences(library), now:, rng: Random.new(seed))
+workout = gen.generate
+
+emphasis = settings.emphasis.reject { |_, f| f == 1.0 }
+puts "Plan: #{plan.goal}, #{plan.split}, #{settings.duration_min} min, #{settings.workouts_per_week}/week"
+puts "Emphasis: #{emphasis.empty? ? 'none' : emphasis.map { |m, f| "#{m} x#{f}" }.join(', ')}"
+last = history.sets.last.performed_at.to_date
+puts "History: #{history.session_count} sessions through #{last} (export)"
+
+tired = gen.recovery.select { |_, v| v < 90 }.sort_by { |_, v| v }
+puts "Still recovering: #{tired.empty? ? 'nothing' : tired.map { |m, v| "#{m} #{v.round}%" }.join(', ')}"
+
+weekly = WeeklySetTargets.new(library:, history:, settings:)
+done = weekly.completed(now)
+puts "Weekly sets: #{weekly.targets.map { |g, t| "#{g} #{done[g]}/#{t}" }.join(', ')}"
+
+puts
+puts FitbodClone.format_workout(workout)
+notes = workout.prescriptions.filter_map do |rx|
+  hit = rx.exercise.primary_muscles.select { |m| emphasis.key?(m) }
+  "  #{rx.exercise.name}: #{hit.map { |m| "#{m} x#{emphasis[m]}" }.join(', ')}" if hit.any?
+end
+puts "\nPicked partly for emphasis:\n#{notes.join("\n")}" if notes.any?
+puts "\n(seed #{seed}; rerun with --seed #{seed} to get this workout again)"
