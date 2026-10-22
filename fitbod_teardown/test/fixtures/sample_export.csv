@@ -1,0 +1,13 @@
+Date,Exercise,Reps,Weight(kg),Duration(s),Distance(m),Incline,Resistance,isWarmup,Note,multiplier
+2026-03-10 18:00:00 +0000,Barbell Bench Press, 8,40.82331,0.0,0.0,0.0,0.0,true,, 1.0
+2026-03-10 18:00:00 +0000,Barbell Bench Press, 8,61.23497,0.0,0.0,0.0,0.0,false,, 1.0
+2026-03-10 18:00:00 +0000,Barbell Bench Press, 8,61.23497,0.0,0.0,0.0,0.0,false,, 1.0
+2026-03-10 18:00:00 +0000,Dumbbell Bicep Curl, 10,11.33981,0.0,0.0,0.0,0.0,false,, 2.0
+2026-03-10 18:00:00 +0000,Plank, 0,0.0,60.0,0.0,0.0,0.0,false,, 0.0
+2026-03-10 18:00:00 +0000,Chest Doorway Stretch, 0,0.0,30.0,0.0,0.0,0.0,false,, 0.0
+
+2026-03-14 18:00:00 +0000,Barbell Bench Press, 5,68.03894,0.0,0.0,0.0,0.0,false,, 1.0
+2026-03-14 18:00:00 +0000,Barbell Bench Press, 5,68.03894,0.0,0.0,0.0,0.0,false,, 1.0
+2026-03-14 18:00:00 +0000,Pull Up, 8,0.0,0.0,0.0,0.0,0.0,false,, 1.0
+2026-03-14 18:00:00 +0000,Loop Band Shoulder External Rotation at 90°, 8,0.0,0.0,0.0,0.0,0.0,false,, 2.0
+2026-03-15 09:00:00 +0000,Running, 0,0.0,1800.0,5000.0,0.0,0.0,false,, 0.0

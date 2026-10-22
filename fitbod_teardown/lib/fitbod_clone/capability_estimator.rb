@@ -11,12 +11,16 @@ module FitbodClone
   class CapabilityEstimator
     Estimate = Struct.new(:value, :source, keyword_init: true) # :history, :transfer, :population
 
-    SMOOTHING = 0.5           # weight of the newest period in the moving average
-    DECAY_GRACE_DAYS = 7      # patent example: "more than a week"
-    DECAY_PER_WEEK = 0.03
-    MAX_DECAY = 0.25
+    # Fitted to a 7-year Fitbod export (README section 7): alpha 0.7 predicts the next
+    # prescribed weight best, and capability holds for ~6 weeks off an exercise, then fades
+    # just under 1% a week (about -14% at six months).
+    SMOOTHING = 0.7           # weight of the newest period in the moving average
+    DECAY_GRACE_DAYS = 42
+    DECAY_PER_WEEK = 0.009
+    MAX_DECAY = 0.15
     TRANSFER_DISCOUNT = 0.9   # be conservative when borrowing from a sibling exercise
     COLD_START_DISCOUNT = 0.8 # help center: first-time exercises start conservative
+    DEFAULT_BW_RATIO = 0.3    # for imported exercises with no strength-standard ratio
 
     EXPERIENCE = { beginner: 0.6, intermediate: 1.0, advanced: 1.35 }.freeze
     SEX = { male: 1.0, female: 0.7 }.freeze
@@ -92,7 +96,7 @@ module FitbodClone
       value =
         case exercise.load_type
         when :weighted
-          @profile.bodyweight * exercise.bw_ratio * EXPERIENCE.fetch(exp) * SEX.fetch(@profile.sex) * COLD_START_DISCOUNT
+          @profile.bodyweight * (exercise.bw_ratio || DEFAULT_BW_RATIO) * EXPERIENCE.fetch(exp) * SEX.fetch(@profile.sex) * COLD_START_DISCOUNT
         when :bodyweight then BODYWEIGHT_START_REPS.fetch(exp).to_f
         when :timed then TIMED_START_SECONDS.fetch(exp).to_f
         end

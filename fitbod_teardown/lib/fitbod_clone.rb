@@ -10,6 +10,9 @@ require_relative "fitbod_clone/exercise_selector"
 require_relative "fitbod_clone/prescriber"
 require_relative "fitbod_clone/workout_generator"
 require_relative "fitbod_clone/strength_score"
+require_relative "fitbod_clone/fitbod_export"
+require_relative "fitbod_clone/backtest"
+require_relative "fitbod_clone/export_analysis"
 
 # Clean-room reconstruction of Fitbod's workout engine from public sources.
 # See ../README.md for the teardown and where each piece comes from.

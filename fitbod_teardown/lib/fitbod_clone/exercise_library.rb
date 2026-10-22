@@ -22,10 +22,11 @@ module FitbodClone
   # Muscles with activation at or above this count as "primary" movers.
   PRIMARY_ACTIVATION = 0.8
 
-  # Weight increments per equipment type (lb). Dumbbells are per hand.
+  # Weight increments per equipment type (lb). Dumbbells are per hand. 5 lb everywhere
+  # matched a real Fitbod export best (machines at 10 lb did worse in the backtest).
   INCREMENTS = {
     barbell: 5.0, ez_bar: 5.0, dumbbell: 5.0, kettlebell: 5.0,
-    cable: 5.0, machine: 10.0
+    cable: 5.0, machine: 5.0
   }.freeze
 
   Exercise = Struct.new(

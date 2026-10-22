@@ -1,0 +1,4 @@
+# Fitbod exports hold personal training data; keep them out of git.
+data/
+*.csv
+!test/fixtures/*.csv

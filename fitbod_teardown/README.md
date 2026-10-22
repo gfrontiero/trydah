@@ -8,6 +8,10 @@ workout engine works, the data model it implies, and a runnable reference engine
 
 - **Sources:** only public material. That means Fitbod's granted patents and published
   applications, its help center, its blog, app-store listings, and third-party reviews.
+- **Black-box calibration:** a real user's Fitbod data export (about 7.5 years, roughly 1,400
+  sessions and 35,000 working sets) is used to measure what the app actually prescribed and to
+  backtest the engine. See [section 7](#7-calibration-against-a-real-fitbod-export). The export
+  itself is personal data and is not in this repo.
 - **No binary or traffic analysis.** The APK/IPA was not decompiled and the API was not
   intercepted. Fitbod's Terms of Use forbid both, and the patents describe the engine in more
   useful detail anyway.
@@ -19,8 +23,9 @@ workout engine works, the data model it implies, and a runnable reference engine
   - **[Stated]**: Fitbod says this in its help center or blog.
   - **[Patent]**: from a Fitbod patent's abstract or claims. A patent shows what Fitbod built
     or planned, not necessarily what ships today.
+  - **[Measured]**: fitted to the real export and checked by backtest.
   - **[Inferred]**: our reconstruction, chosen to match the stated behaviour. These are the
-    tunable constants in the code.
+    tunable constants that the data could not pin down.
 
 ## TL;DR
 
@@ -35,7 +40,12 @@ Workout tab it builds one session by running three models in sequence:
 3. **Capability Recommender**: sets, reps and weight for each picked exercise. It works from a
    per-exercise "capability" (an estimated 1RM), computed as a smoothed moving average of the
    strongest daily performance, decayed after a layoff. Exercises with no history borrow from
-   related lifts or a population model.
+   related lifts or a population model. Each day the rep target is drawn at random from
+   5/6/8/10/12/15, and the weight is read straight off the 1RM curve at that rep count. **[Measured]**
+
+Calibrated this way, the engine predicts the weight Fitbod gave within 5% about half the time
+for lifts done in the last 6 weeks, with a median error of 5.9%
+([section 7](#7-calibration-against-a-real-fitbod-export)).
 
 Everything else is UI on top of that loop: the logger, rest timers, the Apple Watch app,
 strength charts and Strength Score, gym profiles, and integrations.
@@ -77,7 +87,9 @@ Onboarding ──► My Plan / Gym Profile ──► Workout tab: today's genera
   profile. **[Stated]**
 - **Warm-up sets:** optional ramp of lighter, lower-rep sets. Not generated for bodyweight,
   band, accessory, core, assisted, timed or Max Effort exercises, or when the working weight is
-  too light to ramp. **[Stated]**
+  too light to ramp. **[Stated]** In practice this is usually a **single set at 60% × 8** once
+  the working weight reaches about 50 lb, on machines, cables and isolation lifts too.
+  **[Measured]**
 
 ### Exercise feedback numbers
 - Recommend More raises an exercise's chance of appearing by **40-60%**. Recommend Less lowers it by
@@ -134,6 +146,9 @@ Code map:
 | Capability recommender | `lib/fitbod_clone/prescriber.rb` |
 | Workout generator (splits, time budget, ordering) | `lib/fitbod_clone/workout_generator.rb` |
 | Strength Score / mStrength | `lib/fitbod_clone/strength_score.rb` |
+| Fitbod CSV export importer | `lib/fitbod_clone/fitbod_export.rb` |
+| Behaviour profile of an export | `lib/fitbod_clone/export_analysis.rb` |
+| Backtest against an export | `lib/fitbod_clone/backtest.rb` |
 
 ## 3. Components in detail
 
@@ -170,11 +185,16 @@ capabilities, or estimate it from a **ratio** to an exercise they have done. **[
 **Help center.** The engine weights your *strongest* and *most recent* performances. First-time
 exercises start conservative. Weights drop automatically after a break. **[Stated]**
 
-**Reconstruction. [Inferred]**
+**Reconstruction.**
 - Period = training day. The per-day aggregate is the best set e1RM, computed with reps + logged RIR.
 - e1RM formula: Brzycki for ≤10 reps, Epley above, capped at 20 reps. The blog names Epley
-  and the public Strength Tester uses Brzycki, so the production formula is uncertain.
-- EMA with α = 0.5. Decay is 3% per week beyond a 7-day grace period, capped at 25%.
+  and the public Strength Tester uses Brzycki. The weights Fitbod actually prescribed fit this
+  combined curve closely at every rep count from 5 to 15. **[Measured]**
+- EMA with **α = 0.7**. That predicted the next prescription better than α = 0.3 or 0.5,
+  "best of last 3", or "last session only". **[Measured]**
+- Decay: none for **42 days** off an exercise, then **0.9% per week**, capped at 15%. The
+  original guess (7 days, 3%/week) raised median backtest error on lifts returning after a
+  layoff from 12.5% to 20%. **[Measured]**
 - Cold start: transfer from a sibling in the same movement family using the strength-standard
   ratio × 0.9. Otherwise use a population prior of
   `bodyweight × ratio × experience factor × sex factor × 0.8`. A random forest needs
@@ -222,23 +242,33 @@ transition. Exercises are added until the duration budget is spent, with a minim
 sessions. After an easy exercise the engine raises load or reps; after a hard one it eases back.
 RIR ratings feed it. **[Stated]**
 
-**Reconstruction. [Inferred]**
+**Reconstruction.**
+- **Rep target:** drawn per exercise per day from a weighted distribution. The draw is seeded by
+  exercise and date, so regenerating keeps it stable. There is no fixed heavy → medium → light
+  order: in the export, consecutive rep targets look independent. Compound and isolation lifts
+  use the **same** distribution. **[Measured]** for hypertrophy, **[Inferred]** for the rest.
 
-| Goal | Compound reps / sets / rest | Isolation reps / sets / rest | Target RIR |
-|---|---|---|---|
-| Strength | 3-6 / 4 / 180 s | 6-10 / 3 / 120 s | 2 |
-| Hypertrophy | 6-10 / 3 / 120 s | 10-15 / 3 / 75 s | 2 |
-| Endurance | 12-15 / 3 / 60 s | 15-20 / 2 / 45 s | 3 |
-| General | 8-12 / 3 / 90 s | 10-15 / 3 / 60 s | 2 |
+  | Goal | Rep target distribution | Sets (compound / isolation) | Rest |
+  |---|---|---|---|
+  | Hypertrophy | 5: 7%, 6: 5%, 8: 30%, 10: 25%, 12: 22%, 15: 11% | 4 / 3 | 120 s / 75 s |
+  | Strength | 3: 15%, 4: 15%, 5: 35%, 6: 25%, 8: 10% | 4 / 3 | 180 s / 120 s |
+  | Endurance | 12: 30%, 15: 40%, 20: 30% | 3 / 2 | 60 s / 45 s |
+  | General | 8: 25%, 10: 35%, 12: 25%, 15: 15% | 3 / 3 | 90 s / 60 s |
 
-- **Undulation:** sessions cycle heavy → medium → light, using the low, middle and top of the rep range.
-- **Weight:** `weight_for(capability, reps + target RIR)`, rounded **down** to the equipment
-  increment (barbell and dumbbell 5 lb, machine 10 lb).
-- **Effort feedback:** last session's average RIR ≤ 0 → −5%; ≥ 4 → +5%.
-- **Progressive overload:** if last session's top set hit today's reps or more at weight W with
-  RIR ≥ 1, prescribe at least W + one increment.
-- **Warm-ups:** barbell lifts ≥ 95 lb get 40%×10, 60%×5, 80%×3, never below the 45 lb bar.
-  Other compound lifts get one 50%×8 set. No warm-ups for isolation, bodyweight or timed work.
+- **Weight:** `weight_for(capability, reps)`, rounded to the **nearest** 5 lb (machines
+  included). Fitbod prescribes at your logged level with no reps-in-reserve buffer: the original
+  guess of a 2-rep buffer under-prescribed by 5-7%, and rounding down instead of to nearest
+  raised median error from 8.7% to 12.5%. **[Measured]**
+- **Progression** needs no explicit rule. When you log more than prescribed, the α = 0.7 EMA
+  carries most of it into the next prescription; the export drifts up about 1-2% per session.
+  An explicit "+1 increment after a good session" rule made the backtest worse (median error
+  8.7% → 12.5%) and was removed.
+  **[Measured]**
+- **Effort feedback:** last session's average RIR ≤ 0 → −5%; ≥ 4 → +5%. **[Inferred]**: the
+  export has no RIR column.
+- **Warm-ups:** one set at 60% × 8 when the working weight is ≥ 50 lb, on any loaded exercise.
+  This is the most common pattern at every weight. Two-set (≈40%×10, 75%×5) and three-set
+  ramps show up in 10-20% of heavier lifts and are not modelled. **[Measured]**
 
 ### 3.5 Strength Score / mStrength
 **Public facts.** mStrength is a relative per-muscle scale, "neither a percentile nor pounds".
@@ -281,16 +311,19 @@ to either an on-device engine or a cheap server call. The patents describe a ser
 
 ## 5. What is still unknown, and how to find out legitimately
 
+Resolved from the export ([section 7](#7-calibration-against-a-real-fitbod-export)): the
+rep↔weight curve, the capability smoothing, layoff decay, rep-target selection, warm-ups, and
+weight rounding.
+
+Still open:
+
 | Unknown | Black-box experiment (as a normal user of the app) |
 |---|---|
-| Exact e1RM formula | Log one set at a known weight × reps on a fresh exercise; read the "Estimated 1RM" shown. Repeat at 3, 5, 10, 15 reps and fit. |
-| Recovery curve shape | Log a fixed session; screenshot the recovery map every 12 h for 6 days. Linear vs exponential falls out of the plot. |
+| Recovery curve shape | Log a fixed session; screenshot the recovery map every 12 h for 6 days. Linear vs exponential falls out of the plot. The export has no recovery values. |
 | Per-set fatigue constant | Vary sets (2, 4, 6) and RIR on the same lift; compare the initial recovery drop. |
-| Decay after a break | Stop logging one lift for 1, 2, 4 weeks; compare the recommended weight to the pre-break value. |
-| Undulation pattern | Keep everything fixed; record recommended reps over 9 sessions of the same lift. |
 | Cold-start ratios | New account with set bodyweight/experience; record first recommendations for 20 lifts. |
-
-These experiments calibrate the `[Inferred]` constants in the code.
+| Selector weights | Variety is much higher in the export than the reference selector produces; see section 7. |
+| Effect of RIR ratings | Rate the same lift "easy" vs "hard" on alternate sessions and compare the next weight. |
 
 ## 6. Building a clone on this
 
@@ -305,30 +338,90 @@ MVP scope, in order:
 6. Later: replace the heuristic ranker with a learned model once there is data. The patents
    describe training the ranker on population histories labelled with equipment, goal and profile.
 
+## 7. Calibration against a real Fitbod export
+
+Fitbod can export every logged set as a CSV file. Since most users log what
+the app prescribes, an export shows Fitbod's actual recommendations. User edits add noise, so
+the error figures below are upper bounds. One long-time user's export was used: about 7.5 years,
+1,400+ sessions, 35,000 working sets, 1,600 warm-up sets and 675 distinct exercise names.
+
+### Export format
+```
+Date,Exercise,Reps,Weight(kg),Duration(s),Distance(m),Incline,Resistance,isWarmup,Note,multiplier
+2026-03-10 18:00:00 +0000,Barbell Bench Press, 8,61.23497,0.0,0.0,0.0,0.0,false,, 1.0
+```
+- Weights are always stored in **kg**, even for lb users. 61.23497 kg is exactly 135 lb, so
+  convert back before looking for increments.
+- `multiplier` is the **volume multiplier**: 1 for barbell, machine, cable and bodyweight reps;
+  2 for dumbbell pairs; 4 for alternating unilateral dumbbell work (lunges, step-ups); 0 for
+  timed holds, stretches and cardio. Fitbod's volume is `reps × weight × multiplier`.
+- `isWarmup` marks warm-up sets. Cardio rows carry duration and distance with reps = 0. The file
+  is UTF-8 (names like "…at 90°") with occasional blank lines.
+
+### What the data says
+| Behaviour | Measured | What the engine originally assumed |
+|---|---|---|
+| Rep targets | 8: 30%, 10: 25%, 12: 22%, 15: 11%, 5: 7%, 6: 5% (odd counts are user deviations); same for compound and isolation | goal ranges split by compound/isolation |
+| Rep order | no fixed cycle; consecutive targets look independent | heavy → medium → light rotation |
+| Weight vs reps | weight moves opposite to reps (reps down → weight up 6× more often than down) and sits on the 1RM curve | same |
+| Weight level | right at the logged capability, no reps-in-reserve buffer | 2-rep buffer |
+| Capability smoothing | α ≈ 0.7 fits best | α = 0.5 |
+| After time off an exercise | flat to 6 weeks; ×0.975 at 6-8 weeks, ×0.94 at 2-4 months, ×0.85 at 4-6 months | −3%/week after 1 week |
+| Increments | 5 lb (and 2.5 lb for some dumbbells), machines included | machines 10 lb |
+| Warm-ups | none < 50 lb; one at 60% × 8 is the most common pattern at every weight above that, on any loaded lift | barbell 3-step ramp, compound only |
+| Sets per exercise | 3 (41%) or 4 (38%) | 3-4 |
+| Variety | only ~32% of a week's exercises appeared in the previous 4 active weeks; the same exercise comes back a median of 36 days later | not measured |
+
+### Backtest
+Before each logged exercise, the engine predicts the weight from earlier data only, at the rep
+target the user actually logged:
+
+| Slice | Cases | Engine: median error / within 5% / within 10% | "Repeat last weight" baseline |
+|---|---|---|---|
+| All | 5,838 | 8.7% / 41% / 54% | 12.5% / 32% / 44% |
+| Exercise done within 6 weeks | 3,264 | **5.9% / 47% / 62%** | 10.0% / 38% / 52% |
+| Returning after 6+ weeks | 2,574 | 12.5% / 33% / 43% | 15.4% / 25% / 35% |
+
+Errors are lumpy because one 5 lb step is already 9% of a 55 lb lift. Median signed error is
+0 at every rep target: predictions are about as often high (28%) as low (32%).
+
+### Known gaps
+- **Selector variety.** Fitbod rotated through hundreds of exercises. The reference selector's
+  familiarity bonus pushes toward repeats. Exercise choice cannot be backtested from an export
+  the way weights can, because the export records what was picked, not what was offered.
+- **Returning lifts** are still the weakest slice. Fitbod probably also uses cross-exercise
+  information (the patents describe it) that a per-exercise EMA cannot see.
+- **Exercise mapping.** 481 of the 675 names map to muscles via keyword rules in
+  `fitbod_export.rb`. The rest are mobility, cardio or unusual movements and are skipped.
+
 ## Running the reference engine
 
 Needs Ruby ≥ 3.1 and only the standard library (tests use minitest, a bundled gem).
 
 ```sh
 cd fitbod_teardown
-ruby -Ilib test/engine_test.rb                       # tests
-ruby bin/demo                                        # hypertrophy, push/pull/legs, 60 min
+for t in test/*_test.rb; do ruby -Ilib $t; done      # tests
+ruby bin/demo                                        # simulated history: hypertrophy, PPL, 60 min
 ruby bin/demo strength fresh_muscle_groups 45        # goal, split, minutes
+
+# With your own Fitbod export (keep it in data/, which git ignores):
+ruby bin/analyze data/WorkoutExport.csv              # behaviour profile + backtest
+ruby bin/demo --export data/WorkoutExport.csv hypertrophy push_pull_legs 45
 ```
 
-Example output (demo history: three weeks of PPL, ending in a legs and push day plus a run):
+Example output (simulated history: three weeks of PPL, ending in a legs and push day plus a run):
 
 ```
-Pull (~58 min)
+Pull (~55 min)
 1. Barbell Row  [history]
-     warm-up  70 lb x 10
-     warm-up  105 lb x 5
-     warm-up  140 lb x 3
-     3 x 6 @ 175 lb  rest 120s
+     warm-up  100 lb x 8
+     4 x 10 @ 165 lb  rest 120s
 2. Deadlift  [transfer]
-     ...
+     warm-up  160 lb x 8
+     4 x 8 @ 270 lb  rest 120s
 3. Pull Up  [population]
-     3 x 10 reps  rest 120s
+     4 x 10 reps  rest 120s
+...
 ```
 The tag shows where the capability came from: `history` means the user's own logs, `transfer`
 means borrowed from a related lift, and `population` means the cold-start prior.

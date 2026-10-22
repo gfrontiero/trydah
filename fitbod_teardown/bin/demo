@@ -1,55 +1,71 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Simulates three weeks of push/pull/legs training, then generates today's workout.
+# Generates today's workout, either from simulated history or from a real Fitbod export.
 #   ruby fitbod_teardown/bin/demo [goal] [split] [minutes]
+#   ruby fitbod_teardown/bin/demo --export WorkoutExport.csv [goal] [split] [minutes]
 #   e.g. ruby fitbod_teardown/bin/demo strength fresh_muscle_groups 45
 
 require_relative "../lib/fitbod_clone"
 include FitbodClone
 
+export = (i = ARGV.index("--export")) && ARGV.slice!(i, 2).last
 goal = (ARGV[0] || "hypertrophy").to_sym
 split = (ARGV[1] || "push_pull_legs").to_sym
 minutes = (ARGV[2] || 60).to_i
-
-now = Time.new(2026, 10, 22, 18, 0, 0)
 day = 86_400
-sessions = {
-  push: [[:barbell_bench_press, 185, 8], [:overhead_press, 105, 8], [:lateral_raise, 20, 12], [:tricep_pushdown, 60, 12]],
-  pull: [[:barbell_row, 155, 8], [:lat_pulldown, 130, 10], [:face_pull, 50, 15], [:db_curl, 30, 10]],
-  legs: [[:back_squat, 225, 6], [:romanian_deadlift, 185, 8], [:leg_curl, 90, 12], [:calf_raise, 160, 12]]
-}
+profile = UserProfile.new(bodyweight: 180, experience: :intermediate, sex: :male)
 
-sets = []
-rotation = sessions.keys.cycle
-# Train 5 days out of 7 for three weeks; weights creep up ~2% a week.
-(1..21).reverse_each do |days_ago|
-  next if [3, 6].include?(days_ago % 7)
+def simulated_history(now, day)
+  sessions = {
+    push: [[:barbell_bench_press, 185, 8], [:overhead_press, 105, 8], [:lateral_raise, 20, 12], [:tricep_pushdown, 60, 12]],
+    pull: [[:barbell_row, 155, 8], [:lat_pulldown, 130, 10], [:face_pull, 50, 15], [:db_curl, 30, 10]],
+    legs: [[:back_squat, 225, 6], [:romanian_deadlift, 185, 8], [:leg_curl, 90, 12], [:calf_raise, 160, 12]]
+  }
+  sets = []
+  rotation = sessions.keys.cycle
+  # Train 5 days out of 7 for three weeks; weights creep up ~2% a week.
+  (1..21).reverse_each do |days_ago|
+    next if [3, 6].include?(days_ago % 7)
 
-  t = now - days_ago * day
-  week_gain = 1.0 + 0.02 * (3 - days_ago / 7)
-  sessions[rotation.next].each do |id, weight, reps|
-    3.times do |i|
-      sets << LoggedSet.new(exercise_id: id, weight: (weight * week_gain).round, reps:, rir: [3, 2, 1][i], performed_at: t + i * 180)
+    t = now - days_ago * day
+    week_gain = 1.0 + 0.02 * (3 - days_ago / 7)
+    sessions[rotation.next].each do |id, weight, reps|
+      3.times do |i|
+        sets << LoggedSet.new(exercise_id: id, weight: (weight * week_gain).round, reps:, rir: [3, 2, 1][i], performed_at: t + i * 180)
+      end
     end
   end
+  cardio = [CardioSession.new(minutes: 40, intensity: 0.7, performed_at: now - 1 * day)]
+  History.new(sets:, cardio:)
 end
-cardio = [CardioSession.new(minutes: 40, intensity: 0.7, performed_at: now - 1 * day)]
 
-history = History.new(sets:, cardio:)
-profile = UserProfile.new(bodyweight: 180, experience: :intermediate, sex: :male)
-settings = PlanSettings.new(goal:, split:, duration_min: minutes)
-prefs = Preferences.new(lateral_raise: :more, skull_crusher: :exclude)
+if export
+  import = FitbodExport.load(export)
+  library = import.library
+  history = import.history
+  now = Time.now
+  # Equipment = whatever the user has trained with in the last 90 days.
+  recent = history.exercises_since(now - 90 * day).map { |id| library.fetch(id) }
+  equipment = recent.flat_map(&:equipment).uniq
+  settings = PlanSettings.new(goal:, split:, duration_min: minutes, equipment:)
+  prefs = Preferences.new
+else
+  library = ExerciseLibrary.default
+  now = Time.new(2026, 10, 22, 18, 0, 0)
+  history = simulated_history(now, day)
+  settings = PlanSettings.new(goal:, split:, duration_min: minutes)
+  prefs = Preferences.new(lateral_raise: :more, skull_crusher: :exclude)
+end
 
-gen = WorkoutGenerator.new(library: ExerciseLibrary.default, history:, profile:, settings:,
-                           preferences: prefs, now:, rng: Random.new(42))
+gen = WorkoutGenerator.new(library:, history:, profile:, settings:, preferences: prefs, now:, rng: Random.new(42))
 
 puts "Muscle recovery"
 gen.recovery.sort_by { |_, v| v }.each { |m, v| puts format("  %-11s %5.1f%%", m, v) }
 
-caps = CapabilityEstimator.new(library: ExerciseLibrary.default, history:, profile:, now:)
-score = StrengthScore.new(library: ExerciseLibrary.default, history:, profile:, capabilities: caps)
-puts "\nStrength score: #{score.overall}  #{score.muscle_scores}"
+caps = CapabilityEstimator.new(library:, history:, profile:, now:)
+score = StrengthScore.new(library:, history:, profile:, capabilities: caps)
+puts "\nStrength score: #{score.overall}  #{score.muscle_scores}" if score.overall
 
 puts "\nGoal: #{goal}, split: #{split}, #{minutes} min\n\n"
 puts FitbodClone.format_workout(gen.generate)

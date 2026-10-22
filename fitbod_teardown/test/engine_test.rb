@@ -27,14 +27,20 @@ class CapabilityEstimatorTest < Minitest::Test
                           lift(:barbell_bench_press, 210, 5, days_ago: 1))
     est = capabilities(h).estimate(library.fetch(:barbell_bench_press))
     assert_equal :history, est.source
-    # day 1 best 225, day 2 best 236.25, alpha 0.5
-    assert_in_delta 230.625, est.value, 0.01
+    # day 1 best 225, day 2 best 236.25, alpha 0.7
+    assert_in_delta 232.875, est.value, 0.01
   end
 
-  def test_decays_after_a_break
-    h = History.new(sets: lift(:back_squat, 300, 1, days_ago: 35))
-    est = capabilities(h).estimate(library.fetch(:back_squat))
-    assert_in_delta 300 * (1 - 0.03 * 4), est.value, 0.01
+  def test_holds_for_six_weeks_then_decays
+    squat = library.fetch(:back_squat)
+    recent = History.new(sets: lift(:back_squat, 300, 1, days_ago: 35))
+    assert_in_delta 300, capabilities(recent).estimate(squat).value, 0.01
+
+    stale = History.new(sets: lift(:back_squat, 300, 1, days_ago: 70))
+    assert_in_delta 300 * (1 - 0.009 * 4), capabilities(stale).estimate(squat).value, 0.01
+
+    ancient = History.new(sets: lift(:back_squat, 300, 1, days_ago: 400))
+    assert_in_delta 300 * 0.85, capabilities(ancient).estimate(squat).value, 0.01
   end
 
   def test_transfers_from_sibling_exercise
@@ -133,20 +139,37 @@ class PrescriberTest < Minitest::Test
     Prescriber.new(history:, capabilities: capabilities(history), settings:).prescribe(library.fetch(id))
   end
 
-  def test_weight_rounds_to_equipment_increment_and_has_warmups
-    h = History.new(sets: lift(:back_squat, 275, 5, days_ago: 3, rir: 2))
+  def test_weight_reads_capability_off_the_curve_at_the_rep_target
+    h = History.new(sets: lift(:back_squat, 275, 5, days_ago: 3))
     rx = prescribe(:back_squat, history: h, goal: :strength)
-    assert_equal 0.0, rx.weight % 5
     assert_equal 4, rx.sets
-    refute_empty rx.warmups
-    assert(rx.warmups.all? { |w| w.weight >= 45 && w.weight < rx.weight })
+    assert_equal 0.0, rx.weight % 5
+    one_rm = OneRepMax.estimate(275, 5)
+    assert_in_delta OneRepMax.weight_for(one_rm, rx.reps), rx.weight, 2.5
   end
 
-  def test_progressive_overload_after_easy_session
-    h = History.new(sets: lift(:barbell_bench_press, 135, 10, days_ago: 3, rir: 2, sets: 3))
-    rx = prescribe(:barbell_bench_press, history: h)
-    assert_equal 8, rx.reps # one prior session -> "medium" day of the 6-10 range
-    assert_equal 140, rx.weight
+  def test_rep_targets_follow_goal_distribution_and_are_stable_per_day
+    settings = PlanSettings.new(goal: :hypertrophy)
+    caps = capabilities(History.new)
+    targets = (0...400).map do |d|
+      Prescriber.new(history: History.new, capabilities: caps, settings:, now: NOW + d * DAY)
+                    .rep_target(library.fetch(:barbell_bench_press))
+    end
+    assert_equal [5, 6, 8, 10, 12, 15], targets.uniq.sort
+    assert_operator targets.count(8), :>, targets.count(15) * 2
+    again = Prescriber.new(history: History.new, capabilities: caps, settings:, now: NOW)
+    assert_equal targets.first, again.rep_target(library.fetch(:barbell_bench_press))
+  end
+
+  def test_one_warmup_at_sixty_percent_once_working_weight_reaches_fifty
+    heavy = prescribe(:leg_extension, history: History.new(sets: lift(:leg_extension, 120, 10, days_ago: 2)))
+    assert_equal 1, heavy.warmups.size
+    assert_equal 8, heavy.warmups.first.reps
+    assert_in_delta heavy.weight * 0.6, heavy.warmups.first.weight, 2.5
+
+    light = prescribe(:lateral_raise, history: History.new(sets: lift(:lateral_raise, 20, 12, days_ago: 2)))
+    assert_empty light.warmups
+    assert_empty prescribe(:leg_extension, history: History.new(sets: lift(:leg_extension, 120, 10, days_ago: 2)), warmups: false).warmups
   end
 
   def test_backs_off_after_grinding_session

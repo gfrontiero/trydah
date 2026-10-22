@@ -1,0 +1,28 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Behaviour profile and backtest for a Fitbod CSV export.
+#   ruby fitbod_teardown/bin/analyze path/to/WorkoutExport.csv
+
+require_relative "../lib/fitbod_clone"
+
+abort "usage: analyze WorkoutExport.csv" unless ARGV[0]
+
+import = FitbodClone::FitbodExport.load(ARGV[0])
+puts FitbodClone::ExportAnalysis.new(import).report
+
+backtest = FitbodClone::Backtest.new(library: import.library, history: import.history)
+recent = backtest.cases.select { |c| c.gap_days <= FitbodClone::CapabilityEstimator::DECAY_GRACE_DAYS }
+stale = backtest.cases - recent
+puts "\nBacktest: predicted vs logged weight at the logged rep target"
+{ "all" => backtest.cases, "done within 6 weeks" => recent, "after 6+ weeks off" => stale }.each do |label, subset|
+  s = backtest.summary(subset)
+  next if s[:n].zero?
+
+  e = s[:engine]
+  b = s[:repeat_last_weight]
+  puts format("  %-20s n=%-5d engine: median error %4.1f%%, within 5%% %2d%%, within 10%% %2d%%   " \
+              "(repeat last weight: %4.1f%%, %2d%%, %2d%%)",
+              label, s[:n], e[:median_error] * 100, e[:within_5pct] * 100, e[:within_10pct] * 100,
+              b[:median_error] * 100, b[:within_5pct] * 100, b[:within_10pct] * 100)
+end

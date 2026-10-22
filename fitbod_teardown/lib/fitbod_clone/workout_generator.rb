@@ -30,7 +30,7 @@ module FitbodClone
       @capabilities = CapabilityEstimator.new(library:, history:, profile:, now:)
       @recovery_model = RecoveryModel.new(library:, capabilities: @capabilities)
       @selector = ExerciseSelector.new(library:, history:, preferences:, settings:, now:, rng:)
-      @prescriber = Prescriber.new(history:, capabilities: @capabilities, settings:)
+      @prescriber = Prescriber.new(history:, capabilities: @capabilities, settings:, now:)
     end
 
     def recovery
@@ -94,10 +94,9 @@ module FitbodClone
     end
 
     def planned_sets(rx)
-      rir = Prescriber::GOALS.fetch(@settings.goal)[:rir]
       Array.new(rx.sets) do
         LoggedSet.new(exercise_id: rx.exercise.id, weight: rx.weight, reps: rx.reps,
-                      seconds: rx.seconds, rir:, performed_at: @now)
+                      seconds: rx.seconds, rir: RecoveryModel::DEFAULT_RIR, performed_at: @now)
       end
     end
   end
