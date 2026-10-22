@@ -29,7 +29,7 @@ module FitbodClone
       general:     { reps: { 8 => 25, 10 => 35, 12 => 25, 15 => 15 },
                      sets: { compound: 3, isolation: 3 }, rest: { compound: 90, isolation: 60 } }
     }.freeze
-    BODYWEIGHT_RIR = 2
+    BODYWEIGHT_RIR = 0 # export: prescribed reps sit at the recent max-rep average
     TOO_HARD_RIR = 0
     TOO_EASY_RIR = 4
     FEEDBACK_STEP = 0.05

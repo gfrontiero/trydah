@@ -24,6 +24,7 @@ workout engine works, the data model it implies, and a runnable reference engine
   - **[Patent]**: from a Fitbod patent's abstract or claims. A patent shows what Fitbod built
     or planned, not necessarily what ships today.
   - **[Measured]**: fitted to the real export and checked by backtest.
+  - **[Observed]**: seen directly in app screenshots.
   - **[Inferred]**: our reconstruction, chosen to match the stated behaviour. These are the
     tunable constants that the data could not pin down.
 
@@ -264,8 +265,15 @@ RIR ratings feed it. **[Stated]**
   An explicit "+1 increment after a good session" rule made the backtest worse (median error
   8.7% → 12.5%) and was removed.
   **[Measured]**
+- **Bodyweight exercises:** reps = floor of the recent max-rep average, again with no buffer.
+  This matches the logged reps exactly 41% of the time, against 8% for a 2-rep buffer. **[Measured]**
 - **Effort feedback:** last session's average RIR ≤ 0 → −5%; ≥ 4 → +5%. **[Inferred]**: the
   export has no RIR column.
+- **Focus Exercises** are a separate mechanism, not modelled. A chosen lift follows a phased
+  program and is labelled "Focus Exercise" in the workout. The final phase reads "Phase 4 of 4:
+  Final Push: push for as many strong reps as you can on your last set", i.e. an AMRAP test set.
+  Its prescribed load sat about 30% above what the capability EMA supports, while the other
+  lifts in the same workout matched the engine exactly. **[Observed]** in app screenshots.
 - **Warm-ups:** one set at 60% × 8 when the working weight is ≥ 50 lb, on any loaded exercise.
   This is the most common pattern at every weight. Two-set (≈40%×10, 75%×5) and three-set
   ramps show up in 10-20% of heavier lifts and are not modelled. **[Measured]**
@@ -385,7 +393,15 @@ target the user actually logged:
 Errors are lumpy because one 5 lb step is already 9% of a 55 lb lift. Median signed error is
 0 at every rep target: predictions are about as often high (28%) as low (32%).
 
+### Live check
+For a workout the app generated after the export was taken, the engine (fed the export)
+prescribed exactly the app's weight on 3 of the 4 loaded lifts. It also matched the 2:00 rest
+for a compound lift and the bodyweight rep target once the buffer was removed. The one miss was
+the Focus Exercise, which follows its own phased program (section 3.4).
+
 ### Known gaps
+- **Focus Exercise programs:** phase lengths, loading per phase and how the AMRAP result
+  feeds back are unknown.
 - **Selector variety.** Fitbod rotated through hundreds of exercises. The reference selector's
   familiarity bonus pushes toward repeats. Exercise choice cannot be backtested from an export
   the way weights can, because the export records what was picked, not what was offered.

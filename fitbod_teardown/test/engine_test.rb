@@ -182,7 +182,7 @@ class PrescriberTest < Minitest::Test
   def test_bodyweight_and_timed_exercises
     h = History.new(sets: lift(:pull_up, 0, 10, days_ago: 2) +
                           [LoggedSet.new(exercise_id: :plank, seconds: 90, performed_at: NOW - 2 * DAY)])
-    assert_equal 8, prescribe(:pull_up, history: h).reps
+    assert_equal 10, prescribe(:pull_up, history: h).reps
     assert_equal 70, prescribe(:plank, history: h).seconds
     assert_empty prescribe(:pull_up, history: h).warmups
   end
