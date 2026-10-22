@@ -5,6 +5,7 @@
 #   ruby fitbod_teardown/bin/demo [goal] [split] [minutes]
 #   ruby fitbod_teardown/bin/demo --export WorkoutExport.csv [goal] [split] [minutes]
 #   e.g. ruby fitbod_teardown/bin/demo strength fresh_muscle_groups 45
+#   ruby fitbod_teardown/bin/demo --export data/fitbod_export_2019-04_2026-10.csv hypertrophy upper_lower_full 45 7
 
 require_relative "../lib/fitbod_clone"
 include FitbodClone
@@ -13,6 +14,7 @@ export = (i = ARGV.index("--export")) && ARGV.slice!(i, 2).last
 goal = (ARGV[0] || "hypertrophy").to_sym
 split = (ARGV[1] || "push_pull_legs").to_sym
 minutes = (ARGV[2] || 60).to_i
+per_week = (ARGV[3] || 4).to_i
 day = 86_400
 profile = UserProfile.new(bodyweight: 180, experience: :intermediate, sex: :male)
 
@@ -48,13 +50,13 @@ if export
   # Equipment = whatever the user has trained with in the last 90 days.
   recent = history.exercises_since(now - 90 * day).map { |id| library.fetch(id) }
   equipment = recent.flat_map(&:equipment).uniq
-  settings = PlanSettings.new(goal:, split:, duration_min: minutes, equipment:)
+  settings = PlanSettings.new(goal:, split:, duration_min: minutes, workouts_per_week: per_week, equipment:)
   prefs = Preferences.new
 else
   library = ExerciseLibrary.default
   now = Time.new(2026, 10, 22, 18, 0, 0)
   history = simulated_history(now, day)
-  settings = PlanSettings.new(goal:, split:, duration_min: minutes)
+  settings = PlanSettings.new(goal:, split:, duration_min: minutes, workouts_per_week: per_week)
   prefs = Preferences.new(lateral_raise: :more, skull_crusher: :exclude)
 end
 
@@ -66,6 +68,10 @@ gen.recovery.sort_by { |_, v| v }.each { |m, v| puts format("  %-11s %5.1f%%", m
 caps = CapabilityEstimator.new(library:, history:, profile:, now:)
 score = StrengthScore.new(library:, history:, profile:, capabilities: caps)
 puts "\nStrength score: #{score.overall}  #{score.muscle_scores}" if score.overall
+
+weekly = WeeklySetTargets.new(library:, history:, settings:)
+done = weekly.completed(now)
+puts "\nWeekly set targets: #{weekly.targets.map { |g, t| "#{g} #{done[g]}/#{t}" }.join(', ')} (#{weekly.progress(now)}%)"
 
 puts "\nGoal: #{goal}, split: #{split}, #{minutes} min\n\n"
 puts FitbodClone.format_workout(gen.generate)

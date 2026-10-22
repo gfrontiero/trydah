@@ -16,14 +16,15 @@ module FitbodClone
   # Mirrors Fitbod's Gym Profile + My Plan settings.
   PlanSettings = Struct.new(
     :goal,          # :strength, :hypertrophy, :endurance, :general
-    :split,         # :fresh_muscle_groups, :push_pull_legs, :upper_lower, :full_body
+    :split,         # :fresh_muscle_groups, :push_pull_legs, :upper_lower, :upper_lower_full, :full_body
     :duration_min,
+    :workouts_per_week,
     :equipment,     # Array of equipment symbols
     :variability,   # :consistent, :balanced, :varied
     :warmups,       # true/false
     keyword_init: true
   ) do
-    def initialize(goal: :hypertrophy, split: :fresh_muscle_groups, duration_min: 60,
+    def initialize(goal: :hypertrophy, split: :fresh_muscle_groups, duration_min: 60, workouts_per_week: 4,
                    equipment: %i[barbell dumbbell bench squat_rack cable machine pullup_bar ez_bar],
                    variability: :balanced, warmups: true)
       super

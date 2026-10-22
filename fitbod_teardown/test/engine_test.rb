@@ -134,31 +134,29 @@ end
 class PrescriberTest < Minitest::Test
   include TestHelper
 
-  def prescribe(id, history:, goal: :hypertrophy, warmups: true)
+  def prescribe(id, history:, goal: :hypertrophy, warmups: true, seed: 1)
     settings = PlanSettings.new(goal:, warmups:)
-    Prescriber.new(history:, capabilities: capabilities(history), settings:).prescribe(library.fetch(id))
+    Prescriber.new(history:, capabilities: capabilities(history), settings:, rng: Random.new(seed))
+              .prescribe(library.fetch(id))
   end
 
   def test_weight_reads_capability_off_the_curve_at_the_rep_target
     h = History.new(sets: lift(:back_squat, 275, 5, days_ago: 3))
     rx = prescribe(:back_squat, history: h, goal: :strength)
-    assert_equal 4, rx.sets
+    assert_includes [4, 5], rx.sets
     assert_equal 0.0, rx.weight % 5
     one_rm = OneRepMax.estimate(275, 5)
     assert_in_delta OneRepMax.weight_for(one_rm, rx.reps), rx.weight, 2.5
   end
 
-  def test_rep_targets_follow_goal_distribution_and_are_stable_per_day
-    settings = PlanSettings.new(goal: :hypertrophy)
-    caps = capabilities(History.new)
-    targets = (0...400).map do |d|
-      Prescriber.new(history: History.new, capabilities: caps, settings:, now: NOW + d * DAY)
-                    .rep_target(library.fetch(:barbell_bench_press))
-    end
-    assert_equal [5, 6, 8, 10, 12, 15], targets.uniq.sort
-    assert_operator targets.count(8), :>, targets.count(15) * 2
-    again = Prescriber.new(history: History.new, capabilities: caps, settings:, now: NOW)
-    assert_equal targets.first, again.rep_target(library.fetch(:barbell_bench_press))
+  def test_reps_and_sets_follow_measured_distributions_and_reroll_per_generation
+    h = History.new(sets: lift(:barbell_bench_press, 185, 8, days_ago: 3))
+    rxs = (1..600).map { |seed| prescribe(:barbell_bench_press, history: h, seed:) }
+    reps = rxs.map(&:reps)
+    assert_equal (5..15).to_a, reps.uniq.sort
+    assert_operator reps.count(10), :>, reps.count(9) * 3
+    assert_equal [3, 4, 5], rxs.map(&:sets).uniq.sort
+    assert_equal prescribe(:barbell_bench_press, history: h, seed: 7).reps, rxs[6].reps
   end
 
   def test_one_warmup_at_sixty_percent_once_working_weight_reaches_fifty
@@ -231,5 +229,58 @@ class StrengthScoreTest < Minitest::Test
     s = StrengthScore.new(library:, history: h, profile:, capabilities: capabilities(h))
     assert_equal({ chest: 100 }, s.muscle_scores)
     assert_equal 100, s.overall
+  end
+end
+
+class UpperLowerFullSplitTest < Minitest::Test
+  include TestHelper
+
+  def session(kind, days_ago)
+    ids = { upper: %i[barbell_bench_press barbell_row overhead_press],
+            lower: %i[back_squat romanian_deadlift leg_curl],
+            full: %i[barbell_bench_press barbell_row back_squat] }.fetch(kind)
+    ids.flat_map { |id| lift(id, 100, 8, days_ago:, sets: 3) }
+  end
+
+  def day_after(*kinds)
+    sets = kinds.reverse.each_with_index.flat_map { |k, i| session(k, i + 1) }
+    generator(history: History.new(sets:), split: :upper_lower_full).generate.day
+  end
+
+  def test_alternates_upper_and_lower
+    assert_equal :upper, day_after(:upper, :lower)
+    assert_equal :lower, day_after(:lower, :upper)
+    assert_equal :upper, day_after
+  end
+
+  def test_full_body_after_six_upper_lower_sessions
+    assert_equal :full_body, day_after(:full, :upper, :lower, :upper, :lower, :upper, :lower)
+    assert_equal :lower, day_after(:upper, :lower, :full, :upper)
+  end
+end
+
+class WeeklySetTargetsTest < Minitest::Test
+  include TestHelper
+
+  def tracker(history)
+    WeeklySetTargets.new(library:, history:, settings: PlanSettings.new(workouts_per_week: 7, duration_min: 45))
+  end
+
+  def test_targets_scale_from_observed_configuration
+    assert_equal({ push: 53, pull: 29, legs: 42 }, tracker(History.new).targets)
+    half = WeeklySetTargets.new(library:, history: History.new,
+                                settings: PlanSettings.new(workouts_per_week: 7, duration_min: 22.5))
+    assert_equal({ push: 27, pull: 15, legs: 21 }, half.targets)
+  end
+
+  def test_counts_primary_and_secondary_sets_this_week_and_averages_groups
+    # NOW is a Thursday; the week started on Sunday. Last week's sets do not count.
+    h = History.new(sets: lift(:barbell_bench_press, 135, 8, days_ago: 1, sets: 4) +
+                          lift(:deadlift, 225, 5, days_ago: 2, sets: 2) +
+                          lift(:back_squat, 185, 8, days_ago: 6, sets: 5))
+    done = tracker(h).completed(NOW)
+    assert_equal({ push: 4.0, pull: 2.0, legs: 2.0 }, done)
+    expected = ((4.0 / 53 + 2.0 / 29 + 2.0 / 42) / 3 * 100).round
+    assert_equal expected, tracker(h).progress(NOW)
   end
 end

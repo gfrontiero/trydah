@@ -1,4 +1,6 @@
-# Fitbod exports hold personal training data; keep them out of git.
-data/
+# Fitbod exports hold personal training data; keep them out of git unless the owner agrees.
+data/*
+!data/fitbod_export_2019-04_2026-10.csv
 *.csv
 !test/fixtures/*.csv
+!data/fitbod_export_2019-04_2026-10.csv

@@ -46,7 +46,7 @@ module FitbodClone
     def predict(exercise, prior, now, reps)
       history = History.new(sets: prior)
       caps = CapabilityEstimator.new(library: @library, history:, profile: @profile, now:)
-      Prescriber.new(history:, capabilities: caps, settings: @settings, now:).weight_for_reps(exercise, reps)
+      Prescriber.new(history:, capabilities: caps, settings: @settings).weight_for_reps(exercise, reps)
     end
 
     def errors(pairs)

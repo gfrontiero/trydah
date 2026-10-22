@@ -10,8 +10,9 @@ workout engine works, the data model it implies, and a runnable reference engine
   applications, its help center, its blog, app-store listings, and third-party reviews.
 - **Black-box calibration:** a real user's Fitbod data export (about 7.5 years, roughly 1,400
   sessions and 35,000 working sets) is used to measure what the app actually prescribed and to
-  backtest the engine. See [section 7](#7-calibration-against-a-real-fitbod-export). The export
-  itself is personal data and is not in this repo.
+  backtest the engine. See [section 7](#7-calibration-against-a-real-fitbod-export). With the
+  owner's permission the export is included at `data/fitbod_export_2019-04_2026-10.csv`, so the
+  numbers can be reproduced; `test/calibration_test.rb` fails if backtest accuracy regresses.
 - **No binary or traffic analysis.** The APK/IPA was not decompiled and the API was not
   intercepted. Fitbod's Terms of Use forbid both, and the patents describe the engine in more
   useful detail anyway.
@@ -83,7 +84,25 @@ Onboarding ──► My Plan / Gym Profile ──► Workout tab: today's genera
   two most-recovered groups). More splits appear when Focus Exercises are enabled. A split is
   recommended from workouts per week. **[Stated]**
 - **Exercise variability:** More Consistent (keeps about 70-80% of exercises week to week),
-  Balanced (default), More Variety. **[Stated]**
+  Balanced (default), More Variety. **[Stated]** On Balanced, only about a third of a week's
+  exercises had appeared in the previous 4 active weeks. **[Measured]**
+- **The full My Plan screen**, top to bottom. **[Observed]**
+  - Goal (e.g. "Build Muscle"), and Injuries / Limitations (beta).
+  - Location: each gym has its own equipment list (e.g. "57 Selected") and a Bodyweight-only toggle.
+  - Training profile: Workouts Per Week (up to 7), Duration (e.g. 45 min), Experience (e.g. Advanced).
+  - Training format: Training Split (e.g. "Upper/Lower x3 + Full Body" at 7/week), Exercise
+    Variability, Focus Exercises, Warm-Up Sets, Circuits & Supersets, Timed Intervals.
+  - Preferences: Units, Workout Insights (beta), Cardio, Stretching, Start of Week, Manage Exercises.
+- **Workout screen:** a named day ("Upper Body Day", "Lower Body Day 1") with a **Switch**
+  button to change day type, chips for duration and gym, and "N Exercises • M Muscles". A
+  **Coach (beta)** note explains the session in words, comparing it to recent ones, e.g. "vertical
+  pushing and pulling climbing while hinge and ab work ease off … Assisted Pull Ups and Machine
+  Shoulder Press return to the lineup". So the app tracks volume trends per movement pattern and
+  knows when an exercise is coming back after a break. **[Observed]**
+- **Other screens:** Body → Recovery shows a heat map, "days since your last workout" and
+  "fresh muscle groups". Targets shows weekly set targets (section 3.7). Log shows total
+  workouts, a weekly goal ("3/7 days"), a streak, a weekly report, and a calendar with
+  duration or volume per day. **[Observed]**
 - **Quick edits:** regenerate today's workout at 15/30/45/60/90 min without touching the
   profile. **[Stated]**
 - **Warm-up sets:** optional ramp of lighter, lower-rep sets. Not generated for bodyweight,
@@ -147,6 +166,7 @@ Code map:
 | Capability recommender | `lib/fitbod_clone/prescriber.rb` |
 | Workout generator (splits, time budget, ordering) | `lib/fitbod_clone/workout_generator.rb` |
 | Strength Score / mStrength | `lib/fitbod_clone/strength_score.rb` |
+| Weekly set targets | `lib/fitbod_clone/weekly_set_targets.rb` |
 | Fitbod CSV export importer | `lib/fitbod_clone/fitbod_export.rb` |
 | Behaviour profile of an export | `lib/fitbod_clone/export_analysis.rb` |
 | Backtest against an export | `lib/fitbod_clone/backtest.rb` |
@@ -235,6 +255,14 @@ presses. Exercises are then ordered compound first.
 most-recovered of chest, back, shoulders, arms, legs and core. PPL and Upper/Lower pick the day
 whose muscles are most recovered, which rotates naturally without storing a pointer. **[Inferred]**
 
+**"Upper/Lower x3 + Full Body"** (7 workouts/week). In the export, sessions alternate strictly
+between upper and lower. About every seventh session is a mixed day: mostly upper with a few lower
+sets. The engine classifies past sessions (≥ 90% of sets on one half = upper or lower,
+otherwise full body) and schedules full body after 6 upper/lower sessions; otherwise it picks the
+opposite of the last upper/lower day. The rule gives the app's "Upper Body Day" after a
+"Lower Body Day 1". Whether the full-body day is triggered by count, by weekday or by weekly set
+targets is not yet pinned down. **[Measured]** from the export's session sequence.
+
 **Session length. [Inferred]** Each exercise costs `sets × (45 s + rest) + 60 s per warm-up + 90 s`
 transition. Exercises are added until the duration budget is spent, with a minimum of 3 and a maximum of 10.
 
@@ -244,17 +272,25 @@ sessions. After an easy exercise the engine raises load or reps; after a hard on
 RIR ratings feed it. **[Stated]**
 
 **Reconstruction.**
-- **Rep target:** drawn per exercise per day from a weighted distribution. The draw is seeded by
-  exercise and date, so regenerating keeps it stable. There is no fixed heavy → medium → light
-  order: in the export, consecutive rep targets look independent. Compound and isolation lifts
-  use the **same** distribution. **[Measured]** for hypertrophy, **[Inferred]** for the rest.
+- **Rep target and set count:** drawn per exercise from weighted distributions, and drawn
+  again whenever the workout is regenerated. In screenshots, the same exercise went from
+  3 × 12 @ 30 lb to 5 × 9 @ 30 lb on a refresh with no new history. Both are what the 1RM curve
+  gives for that capability. There is no fixed heavy → medium → light order: in the export,
+  consecutive rep targets look independent, and lifts in one session share a target only
+  slightly more often than chance (45% vs 40%). Compound and isolation lifts use the **same**
+  distributions. Lower rep targets come with slightly more sets (3.8 at 5 reps vs 3.2 at 15),
+  which is not modelled. **[Measured]** for hypertrophy, **[Inferred]** for the rest.
 
-  | Goal | Rep target distribution | Sets (compound / isolation) | Rest |
+  | Goal | Rep target distribution | Sets | Rest (compound / isolation) |
   |---|---|---|---|
-  | Hypertrophy | 5: 7%, 6: 5%, 8: 30%, 10: 25%, 12: 22%, 15: 11% | 4 / 3 | 120 s / 75 s |
-  | Strength | 3: 15%, 4: 15%, 5: 35%, 6: 25%, 8: 10% | 4 / 3 | 180 s / 120 s |
-  | Endurance | 12: 30%, 15: 40%, 20: 30% | 3 / 2 | 60 s / 45 s |
-  | General | 8: 25%, 10: 35%, 12: 25%, 15: 15% | 3 / 3 | 90 s / 60 s |
+  | Hypertrophy | 8: 21%, 10: 22%, 12: 18%, 15: 10%, 5: 5%, 6: 3%, and 7/9/11/13: 3-4% each, 14: 2% | 3: 48%, 4: 44%, 5: 8% | 120 s / 75 s |
+  | Strength | 3: 15%, 4: 15%, 5: 35%, 6: 25%, 8: 10% | 4: 60%, 5: 40% | 180 s / 120 s |
+  | Endurance | 12: 30%, 15: 40%, 20: 30% | 2: 30%, 3: 70% | 60 s / 45 s |
+  | General | 8: 25%, 10: 35%, 12: 25%, 15: 15% | as hypertrophy | 90 s / 60 s |
+
+  Odd targets are real; the app prescribed a 9 in a screenshot. Some odd counts in the export
+  are surely user edits, though. A strict "same weight, one more rep" double progression
+  explains only ~10% of them.
 
 - **Weight:** `weight_for(capability, reps)`, rounded to the **nearest** 5 lb (machines
   included). Fitbod prescribes at your logged level with no reps-in-reserve buffer: the original
@@ -294,6 +330,21 @@ A Fitbod filing, **"Workout modification based on muscle strength measurement tr
 exercise choice when strength trends flatten or drop. **[Patent]/[Stated]** This is *not*
 implemented in the reference engine. It would sit in the Prescriber as a deload rule keyed on
 the slope of the capability EMA.
+
+### 3.7 Weekly set targets
+The Targets screen shows working sets done this week against a target for Push, Pull and Leg
+muscles (e.g. 24.5/53, 10.5/29, 19.5/42) and a ring at **43%**. That is the *mean of the three
+group percentages*, not total sets ÷ total target (44%). Counts come in half sets and the week
+starts on the "Start of Week" setting. **[Observed]** The help center says duration drives the
+weekly set targets. **[Stated]**
+
+`weekly_set_targets.rb` reproduces the screen. Targets scale with workouts/week × duration from
+the one configuration seen (7 × 45 min → 53/29/42). Each set counts 1 for a group it works as a
+prime mover and 0.5 for a group it only works secondarily. **[Inferred]** The crediting rule is
+unresolved. Over the export's last 8 full weeks (7 sessions each), this rule puts pull and legs
+at about 100% of target but push at only about 50%. Summing credit over every muscle in a group
+fits push (52 vs 53) but overshoots pull and legs. The per-group detail screens would settle it.
+Whether the selector chases these targets (e.g. favouring a group that is behind) is not modelled.
 
 ## 4. Implied data model
 
@@ -369,7 +420,7 @@ Date,Exercise,Reps,Weight(kg),Duration(s),Distance(m),Incline,Resistance,isWarmu
 ### What the data says
 | Behaviour | Measured | What the engine originally assumed |
 |---|---|---|
-| Rep targets | 8: 30%, 10: 25%, 12: 22%, 15: 11%, 5: 7%, 6: 5% (odd counts are user deviations); same for compound and isolation | goal ranges split by compound/isolation |
+| Rep targets | 10: 22%, 8: 21%, 12: 18%, 15: 10%, 5: 5%, 6: 3%, odd values 3-4% each; same for compound and isolation; re-rolled on refresh | goal ranges split by compound/isolation, fixed per day |
 | Rep order | no fixed cycle; consecutive targets look independent | heavy → medium → light rotation |
 | Weight vs reps | weight moves opposite to reps (reps down → weight up 6× more often than down) and sits on the 1RM curve | same |
 | Weight level | right at the logged capability, no reps-in-reserve buffer | 2-rep buffer |
@@ -397,9 +448,12 @@ Errors are lumpy because one 5 lb step is already 9% of a 55 lb lift. Median sig
 For a workout the app generated after the export was taken, the engine (fed the export)
 prescribed exactly the app's weight on 3 of the 4 loaded lifts. It also matched the 2:00 rest
 for a compound lift and the bodyweight rep target once the buffer was removed. The one miss was
-the Focus Exercise, which follows its own phased program (section 3.4).
+the Focus Exercise, which follows its own phased program (section 3.4). After a refresh, the
+app's new prescription for one lift (5 × 9 @ 30 lb instead of 3 × 12 @ 30 lb) again agreed with
+the engine's weight for that rep target.
 
 ### Known gaps
+- **Weekly set crediting** (section 3.7) and whether targets steer exercise selection.
 - **Focus Exercise programs:** phase lengths, loading per phase and how the AMRAP result
   feeds back are unknown.
 - **Selector variety.** Fitbod rotated through hundreds of exercises. The reference selector's
@@ -420,23 +474,24 @@ for t in test/*_test.rb; do ruby -Ilib $t; done      # tests
 ruby bin/demo                                        # simulated history: hypertrophy, PPL, 60 min
 ruby bin/demo strength fresh_muscle_groups 45        # goal, split, minutes
 
-# With your own Fitbod export (keep it in data/, which git ignores):
-ruby bin/analyze data/WorkoutExport.csv              # behaviour profile + backtest
-ruby bin/demo --export data/WorkoutExport.csv hypertrophy push_pull_legs 45
+# With the bundled export, or your own (other files in data/ are git-ignored):
+ruby bin/analyze data/fitbod_export_2019-04_2026-10.csv          # behaviour profile + backtest
+ruby bin/demo --export data/fitbod_export_2019-04_2026-10.csv hypertrophy upper_lower_full 45 7
+#                                                     goal        split            minutes, workouts/week
 ```
 
 Example output (simulated history: three weeks of PPL, ending in a legs and push day plus a run):
 
 ```
-Pull (~55 min)
+Pull (~53 min)
 1. Barbell Row  [history]
-     warm-up  100 lb x 8
-     4 x 10 @ 165 lb  rest 120s
+     warm-up  110 lb x 8
+     3 x 8 @ 180 lb  rest 120s
 2. Deadlift  [transfer]
-     warm-up  160 lb x 8
-     4 x 8 @ 270 lb  rest 120s
+     warm-up  180 lb x 8
+     3 x 5 @ 300 lb  rest 120s
 3. Pull Up  [population]
-     4 x 10 reps  rest 120s
+     4 x 12 reps  rest 120s
 ...
 ```
 The tag shows where the capability came from: `history` means the user's own logs, `transfer`
